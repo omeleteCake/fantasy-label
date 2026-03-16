@@ -1,30 +1,22 @@
-import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
-export default async function Dashboard() {
-  const [artists, users, weeklyTop] = await Promise.all([
-    prisma.artist.count(),
-    prisma.user.count(),
-    prisma.weeklyUserScore.findMany({ orderBy: { score: "desc" }, take: 5, include: { user: true, week: true } }),
-  ]);
-
+export default function LandingPage() {
   return (
-    <section className="space-y-6">
-      <h1 className="text-3xl font-semibold">Fantasy Label Dashboard</h1>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded bg-zinc-900 p-4">Artists: {artists}</div>
-        <div className="rounded bg-zinc-900 p-4">Users: {users}</div>
-        <div className="rounded bg-zinc-900 p-4">Season length: 4 weeks</div>
+    <main>
+      <h1>Music Momentum Market</h1>
+      <p>Trade artist momentum and dominate weekly fantasy rankings.</p>
+      <div className="grid grid-2">
+        <div className="card">
+          <h3>Start your season</h3>
+          <p>Get starter cash, build a portfolio, and lock a lineup before Monday UTC.</p>
+          <Link href="/sign-up">Create account →</Link>
+        </div>
+        <div className="card">
+          <h3>Already playing?</h3>
+          <p>Review your dashboard, manage positions, and watch weekly points climb.</p>
+          <Link href="/sign-in">Sign in →</Link>
+        </div>
       </div>
-      <div>
-        <h2 className="mb-2 text-xl">Top Weekly Scores</h2>
-        <ul className="space-y-2">
-          {weeklyTop.map((entry) => (
-            <li key={entry.id} className="rounded bg-zinc-900 p-3">
-              {entry.user.name ?? entry.user.email} — {Number(entry.score).toFixed(2)} ({entry.week.id})
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
+    </main>
   );
 }
