@@ -575,6 +575,19 @@ npm run dev
 
 ---
 
+
+## Seed Idempotency Strategy
+
+`prisma/seed.ts` is intentionally idempotent and can be run repeatedly.
+
+* Users are seeded with deterministic identities:
+  * `admin@mmm.local` / `admin`
+  * `test01@mmm.local` ... `test10@mmm.local` / `test_user_01` ... `test_user_10`
+* User, wallet, artist, and season records use `upsert` with stable unique keys.
+* Starting cash grants are normalized by deleting prior `STARTING_GRANT` ledger rows per user and recreating one canonical row.
+* Season weeks are recreated (`deleteMany` + create) to guarantee exactly 4 canonical weeks every run.
+* Demo `ArtistMetricWeekly` rows for the active week are regenerated (`deleteMany` + create) and can be disabled with `SEED_DEMO_METRICS=false`.
+
 # Environment Variables
 
 Example:

@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WeeklyLineup {
+  id          String   @id @default(cuid())
+  userId      String
+  weekId      String
+  submittedAt DateTime?
+  lockedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items WeeklyLineupItem[]
+
+  @@unique([userId, weekId])
+}
+
+model WeeklyLineupItem {
+  id       String @id @default(cuid())
+  lineupId String
+  artistId String
+
+  lineup WeeklyLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+
+  @@unique([lineupId, artistId])
+}
