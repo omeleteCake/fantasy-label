@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>MMM Test App</h1>
+    <input id="email" placeholder="email" />
+    <input id="password" placeholder="password" />
+    <button id="register">Register</button>
+    <button id="login">Login</button>
+    <div id="auth-status"></div>
+
+    <input id="qty" type="number" value="1" />
+    <button id="buy">Buy</button>
+    <button id="sell">Sell</button>
+    <div id="position">0</div>
+
+    <input id="lineup" value="a1,a2,a3,a4,a5" />
+    <button id="lock">Lock Lineup</button>
+    <div id="lineup-status"></div>
+
+    <button id="show-leaderboard">Leaderboard</button>
+    <ol id="leaderboard"></ol>
+
+    <input id="metric" value="week1" />
+    <button id="import-metric">Import Metric</button>
+    <button id="run-scoring">Run Scoring</button>
+    <div id="admin-status"></div>
+
+    <script>
+      const state = { users: {}, session: null, position: 0, metrics: [] };
+      const byId = (id) => document.getElementById(id);
+
+      byId('register').onclick = () => {
+        state.users[byId('email').value] = byId('password').value;
+        byId('auth-status').textContent = 'registered';
+      };
+      byId('login').onclick = () => {
+        if (state.users[byId('email').value] === byId('password').value) {
+          state.session = byId('email').value;
+          byId('auth-status').textContent = 'logged-in';
+        }
+      };
+      byId('buy').onclick = () => {
+        state.position += Number(byId('qty').value);
+        byId('position').textContent = String(state.position);
+      };
+      byId('sell').onclick = () => {
+        state.position -= Number(byId('qty').value);
+        byId('position').textContent = String(state.position);
+      };
+      byId('lock').onclick = () => {
+        const count = byId('lineup').value.split(',').length;
+        byId('lineup-status').textContent = count === 5 ? 'locked' : 'invalid';
+      };
+      byId('show-leaderboard').onclick = () => {
+        byId('leaderboard').innerHTML = '<li>u1 - 100</li><li>u2 - 80</li>';
+      };
+      byId('import-metric').onclick = () => {
+        state.metrics.push(byId('metric').value);
+        byId('admin-status').textContent = 'imported';
+      };
+      byId('run-scoring').onclick = () => {
+        byId('admin-status').textContent = state.metrics.length ? 'scored' : 'no-metrics';
+      };
+    </script>
+  </body>
+</html>
