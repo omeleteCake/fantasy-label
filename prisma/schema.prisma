@@ -7,230 +7,87 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum TxType {
-  DEPOSIT
-  BUY
-  SELL
-  SCORE_PAYOUT
-  ADJUSTMENT
+enum UserRole {
+  USER
+  ADMIN
 }
 
-enum OrderSide {
+enum LedgerEntryType {
+  STARTING_GRANT
+  BUY
+  SELL
+  BUY_FEE
+  SELL_FEE
+  ADMIN_ADJUSTMENT
+}
+
+enum TradeSide {
   BUY
   SELL
 }
 
-enum JobStatus {
+enum SeasonStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum WeekStatus {
+  DRAFT
+  OPEN
+  LOCKED
+  SCORED
+  FINALIZED
+}
+
+enum LineupStatus {
+  DRAFT
+  LOCKED
+}
+
+enum LineupSlot {
+  SLOT_1
+  SLOT_2
+  SLOT_3
+  SLOT_4
+  SLOT_5
+}
+
+enum ScoringJobType {
+  WEEKLY_SCORING
+  SEASON_ROLLOVER
+}
+
+enum JobRunStatus {
   PENDING
   RUNNING
-  DONE
+  SUCCEEDED
   FAILED
 }
 
 model User {
-  id            String                 @id @default(cuid())
-  name          String?
-  email         String?                @unique
-  emailVerified DateTime?
-  image         String?
-  isAdmin       Boolean                @default(false)
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  wallet        Wallet?
-  holdings      Holding[]
-  lineups       WeeklyLineup[]
-  weeklyScores  WeeklyUserScore[]
-  seasonScores  SeasonUserScore[]
-  transactions  WalletTransaction[]
-  trades        Trade[]
-  accounts      Account[]
-  sessions      Session[]
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  role         UserRole  @default(USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@index([createdAt])
+  accounts        Account[]
+  sessions        Session[]
+  wallet          Wallet?
+  holdings        Holding[]
+  trades          Trade[]
+  weeklyLineups   WeeklyLineup[]
+  weeklyScores    WeeklyScore[]
+  seasonScores    SeasonScore[]
+  snapshots       PortfolioSnapshot[]
+  createdJobRuns  ScoringJobRun[] @relation("ScoringJobRunCreatedBy")
 }
 
-model Wallet {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  balance   Decimal  @db.Decimal(20, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model WalletTransaction {
-  id             String   @id @default(cuid())
-  userId         String
-  type           TxType
-  amount         Decimal  @db.Decimal(20, 6)
-  balanceAfter   Decimal  @db.Decimal(20, 6)
-  referenceType  String
-  referenceId    String
-  createdAt      DateTime @default(now())
-  idempotencyKey String?  @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-}
-
-model Artist {
-  id            String             @id @default(cuid())
-  slug          String             @unique
-  name          String
-  genre         String
-  imageUrl      String?
-  description   String?
-  basePrice     Decimal            @db.Decimal(20, 6)
-  kFactor       Decimal            @db.Decimal(20, 6)
-  supply        Int                @default(0)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  holdings      Holding[]
-  trades        Trade[]
-  lineupEntries WeeklyLineupEntry[]
-  weeklyMetrics WeeklyArtistMetric[]
-
-  @@index([name])
-}
-
-model Holding {
-  id        String   @id @default(cuid())
-  userId    String
-  artistId  String
-  quantity  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, artistId])
-}
-
-model Trade {
-  id             String    @id @default(cuid())
-  userId         String
-  artistId       String
-  side           OrderSide
-  quantity       Int
-  grossAmount    Decimal   @db.Decimal(20, 6)
-  supplyBefore   Int
-  supplyAfter    Int
-  createdAt      DateTime  @default(now())
-  idempotencyKey String?   @unique
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  artist         Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@index([artistId, createdAt])
-  @@index([userId, createdAt])
-}
-
-model Week {
-  id            String             @id
-  startAt       DateTime
-  endAt         DateTime
-  lineupLockAt  DateTime
-  seasonId      String
-  createdAt     DateTime           @default(now())
-  lineups       WeeklyLineup[]
-  artistMetrics WeeklyArtistMetric[]
-  userScores    WeeklyUserScore[]
-
-  @@index([startAt])
-}
-
-model Season {
-  id          String            @id
-  name        String
-  startAt     DateTime
-  endAt       DateTime
-  createdAt   DateTime          @default(now())
-  weeks       Week[]
-  userScores  SeasonUserScore[]
-}
-
-model WeeklyLineup {
-  id        String             @id @default(cuid())
-  userId    String
-  weekId    String
-  lockedAt  DateTime
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  week      Week               @relation(fields: [weekId], references: [id], onDelete: Cascade)
-  entries   WeeklyLineupEntry[]
-
-  @@unique([userId, weekId])
-}
-
-model WeeklyLineupEntry {
-  id        String       @id @default(cuid())
-  lineupId  String
-  artistId  String
-  position  Int
-  createdAt DateTime     @default(now())
-  lineup    WeeklyLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
-  artist    Artist       @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([lineupId, artistId])
-  @@unique([lineupId, position])
-}
-
-model WeeklyArtistMetric {
-  id        String   @id @default(cuid())
-  weekId    String
-  artistId  String
-  score     Decimal  @db.Decimal(20, 6)
-  source    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  week      Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
-  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-
-  @@unique([weekId, artistId])
-}
-
-model WeeklyUserScore {
-  id        String   @id @default(cuid())
-  weekId    String
-  userId    String
-  score     Decimal  @db.Decimal(20, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  week      Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([weekId, userId])
-  @@index([weekId, score])
-}
-
-model SeasonUserScore {
-  id        String   @id @default(cuid())
-  seasonId  String
-  userId    String
-  score     Decimal  @db.Decimal(20, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([seasonId, userId])
-  @@index([seasonId, score])
-}
-
-model ScoringJob {
-  id        String    @id @default(cuid())
-  weekId    String
-  status    JobStatus @default(PENDING)
-  runAt     DateTime  @default(now())
-  finishedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@unique([weekId])
-}
-
-// NextAuth v5 tables
 model Account {
+  id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
@@ -242,18 +99,19 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([provider, providerAccountId])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
 model Session {
+  id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([sessionToken])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -261,5 +119,247 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
 
-  @@id([identifier, token])
+  @@unique([identifier, token])
+}
+
+model Wallet {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  cashBalance Decimal  @db.Decimal(20, 6)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledgerEntries WalletLedgerEntry[]
+}
+
+model WalletLedgerEntry {
+  id           String          @id @default(cuid())
+  walletId     String
+  type         LedgerEntryType
+  amount       Decimal         @db.Decimal(20, 6)
+  balanceAfter Decimal         @db.Decimal(20, 6)
+  tradeId      String?
+  reference    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  trade  Trade? @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@index([walletId, type, createdAt])
+}
+
+model Artist {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  displayName       String
+  imageUrl          String?
+  basePrice         Decimal  @db.Decimal(20, 6)
+  ammK              Decimal  @db.Decimal(20, 10)
+  circulatingSupply Decimal  @db.Decimal(20, 6) @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  holdings      Holding[]
+  trades        Trade[]
+  metricsWeekly ArtistMetricWeekly[]
+  lineupItems   WeeklyLineupItem[]
+}
+
+model Holding {
+  id        String   @id @default(cuid())
+  userId    String
+  artistId  String
+  quantity  Decimal  @db.Decimal(20, 6)
+  avgCost   Decimal  @db.Decimal(20, 6)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artistId])
+  @@index([userId, updatedAt])
+}
+
+model Trade {
+  id              String    @id @default(cuid())
+  userId          String
+  artistId        String
+  side            TradeSide
+  quantity        Decimal   @db.Decimal(20, 6)
+  spotPriceBefore Decimal   @db.Decimal(20, 6)
+  spotPriceAfter  Decimal   @db.Decimal(20, 6)
+  grossAmount     Decimal   @db.Decimal(20, 6)
+  feeAmount       Decimal   @db.Decimal(20, 6)
+  netAmount       Decimal   @db.Decimal(20, 6)
+  createdAt       DateTime  @default(now())
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist        Artist              @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  ledgerEntries WalletLedgerEntry[]
+
+  @@index([userId, createdAt])
+  @@index([artistId, createdAt])
+}
+
+model Season {
+  id          String       @id @default(cuid())
+  number      Int          @unique
+  status      SeasonStatus @default(DRAFT)
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  weeks        Week[]
+  seasonScores SeasonScore[]
+}
+
+model Week {
+  id        String     @id @default(cuid())
+  seasonId  String
+  number    Int
+  status    WeekStatus @default(DRAFT)
+  weekStart DateTime   @unique
+  weekEnd   DateTime
+  lockAt    DateTime
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  season        Season               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  lineups       WeeklyLineup[]
+  weeklyScores  WeeklyScore[]
+  metricsWeekly ArtistMetricWeekly[]
+  snapshots     PortfolioSnapshot[]
+
+  @@unique([seasonId, number])
+}
+
+model WeeklyLineup {
+  id         String       @id @default(cuid())
+  userId      String
+  weekId      String
+  status      LineupStatus @default(DRAFT)
+  submittedAt DateTime?
+  lockedAt    DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week   Week               @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  items  WeeklyLineupItem[]
+  score  WeeklyScore?
+
+  @@unique([userId, weekId])
+}
+
+model WeeklyLineupItem {
+  id        String     @id @default(cuid())
+  lineupId  String
+  artistId  String
+  slot      LineupSlot
+  createdAt DateTime   @default(now())
+
+  lineup WeeklyLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  artist Artist       @relation(fields: [artistId], references: [id], onDelete: Restrict)
+
+  @@unique([lineupId, slot])
+  @@unique([lineupId, artistId])
+  @@index([artistId])
+}
+
+model ArtistMetricWeekly {
+  id                    String   @id @default(cuid())
+  artistId              String
+  weekId                String
+  rawStreams            Float
+  rawGrowthRate         Float
+  rawEngagementGrowth   Float
+  normalizedStreams     Float
+  normalizedGrowthRate  Float
+  normalizedEngagement  Float
+  finalScore            Float
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  week   Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, weekId])
+  @@index([weekId, finalScore])
+}
+
+model WeeklyScore {
+  id          String   @id @default(cuid())
+  userId      String
+  weekId      String
+  lineupId    String   @unique
+  finalPoints Float
+  rank        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week   Week         @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  lineup WeeklyLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekId])
+  @@index([weekId, finalPoints])
+}
+
+model SeasonScore {
+  id               String   @id @default(cuid())
+  userId           String
+  seasonId         String
+  cumulativePoints Float    @default(0)
+  rank             Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seasonId])
+  @@index([seasonId, cumulativePoints])
+}
+
+model PortfolioSnapshot {
+  id            String   @id @default(cuid())
+  userId        String
+  weekId        String
+  totalValue    Decimal  @db.Decimal(20, 6)
+  cashBalance   Decimal  @db.Decimal(20, 6)
+  holdingsValue Decimal  @db.Decimal(20, 6)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekId])
+  @@index([weekId, totalValue])
+}
+
+model ScoringJobRun {
+  id             String         @id @default(cuid())
+  jobType        ScoringJobType
+  status         JobRunStatus   @default(PENDING)
+  idempotencyKey String         @unique
+  targetWeekId   String?
+  targetSeasonId String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  errorMessage   String?
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  createdBy User? @relation("ScoringJobRunCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([jobType, status, createdAt])
+  @@index([targetWeekId])
+  @@index([targetSeasonId])
 }
