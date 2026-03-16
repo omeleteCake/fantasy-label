@@ -1,68 +1,97 @@
-Build a production-ready v1 web app for a fake-money music fantasy market game.
+# Fantasy Label v1
 
-Tech stack:
-- Next.js 15
-- TypeScript
-- Tailwind
-- PostgreSQL
-- Prisma
+Production-ready baseline for a fake-money music fantasy market game using:
+- Next.js 15 + TypeScript + Tailwind
+- PostgreSQL + Prisma
 - NextAuth
-- Redis optional
-- PostHog analytics
+- Optional Redis-compatible background orchestration (not required for local v1)
+- PostHog analytics instrumentation
 
-Core product rules:
-- Users get equal starting fake cash
-- Users buy and sell artist cards in a fake-money AMM market
-- Each artist has one card type in v1
-- Price uses a quadratic bonding curve:
-  P(s) = base_price + k*s^2
-- Buy/sell execution must use integral pricing, not naive spot price
-- Users can hold any number of cards they can afford
-- Each week, users lock a lineup of exactly 5 owned artist cards
-- Weekly lineup lock is Monday 00:00 UTC
-- Weekly scoring window is Monday 00:00 UTC to Sunday 23:59 UTC
-- Artist weekly score is ingested from admin-managed metrics table
-- User weekly score is the sum of weekly scores for the 5 selected cards
-- Track weekly leaderboard, season leaderboard, and portfolio leaderboard separately
-- Season length is 4 weeks
-- No real money, no crypto, no packs, no rarity tiers, no private leagues in v1
+## Product behavior implemented
 
-Implement:
-1. full database schema
-2. auth
-3. wallet and holdings ledger
-4. AMM buy/sell engine
-5. artist list/detail endpoints
-6. portfolio endpoints
-7. weekly lineup submission and lock
-8. scoring worker
-9. weekly and seasonal leaderboards
-10. admin UI for importing artists and weekly metrics
-11. frontend pages:
-   - dashboard
-   - market
-   - artist detail
-   - portfolio
-   - lineup builder
-   - weekly leaderboard
-   - season leaderboard
-12. analytics instrumentation
-13. seed scripts with 50 sample artists
-14. test coverage for pricing, wallet updates, lineup locking, and scoring idempotency
+- Equal starting fake cash for new users (`STARTING_CASH`).
+- Single card type per artist.
+- AMM quadratic bonding curve: `P(s) = base_price + k*s^2`.
+- **Integral** buy/sell execution via curve primitive (no naive spot-price fills).
+- Transactional wallet + holdings updates.
+- Guards for no negative balance and no overselling.
+- Weekly lineup submission requiring exactly 5 owned unique artist cards.
+- Lineup lock at Monday 00:00 UTC.
+- Weekly scoring (Mon 00:00 UTC through Sun 23:59 UTC) from admin-ingested artist metrics.
+- Separate weekly, season (4-week), and portfolio views.
+- Idempotent scoring jobs through `ScoringJob` uniqueness and status checks.
 
-Non-negotiable constraints:
-- all financial state changes must be transactional
-- no negative balances
-- no overselling
-- no lineup edits after lock
-- all scoring jobs idempotent
-- all times stored and computed in UTC
-- code should be modular and documented
-- include README with local setup, env vars, seed steps, and architecture summary
+## Repo structure
 
-Deliver in phases:
-Phase 1: repo, auth, db, seeds
-Phase 2: AMM trading and portfolio
-Phase 3: weekly lineup and scoring
-Phase 4: frontend polish and admin tools
-Phase 5: tests and deployment config
+- `app/`: Next.js App Router pages and API routes.
+- `lib/`: auth, Prisma, AMM math, services (trading, lineup, week, scoring), analytics.
+- `prisma/schema.prisma`: full data model.
+- `prisma/seed.ts`: seeds 50 artists + admin user + current week.
+- `scripts/score-week.ts`: scoring worker entrypoint.
+- `tests/`: pricing, wallet, lineup lock, scoring idempotency tests.
+
+## Setup
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Create env:
+   ```bash
+   cp .env.example .env
+   ```
+3. Run DB migrations:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+4. Seed sample data:
+   ```bash
+   npx prisma db seed
+   ```
+5. Start app:
+   ```bash
+   npm run dev
+   ```
+
+## Environment variables
+
+- `DATABASE_URL`: Postgres connection string.
+- `NEXTAUTH_SECRET`: session signing secret.
+- `NEXTAUTH_URL`: app URL.
+- `STARTING_CASH`: fake cash grant for new users.
+- `ADMIN_EMAIL`: admin gate for import endpoints.
+- `NEXT_PUBLIC_POSTHOG_KEY`: optional PostHog key.
+- `NEXT_PUBLIC_POSTHOG_HOST`: optional PostHog host.
+
+## Key API endpoints
+
+- `GET /api/artists`
+- `POST /api/market/trade` with `{ artistId, side, quantity, idempotencyKey? }`
+- `GET /api/portfolio`
+- `POST /api/lineups` with `{ artistIds: string[5] }`
+- `GET /api/leaderboards/weekly`
+- `GET /api/leaderboards/season`
+- `POST /api/admin/artists/import` (admin)
+- `POST /api/admin/metrics/import` (admin)
+
+## Scoring worker
+
+Run scoring for a week id:
+```bash
+npx tsx scripts/score-week.ts week-2026-01-05
+```
+
+## Phase mapping
+
+- **Phase 1**: project setup, auth wiring, schema, seeds.
+- **Phase 2**: AMM trading + portfolio endpoints.
+- **Phase 3**: lineup lock and scoring pipeline.
+- **Phase 4**: frontend pages + admin import surface.
+- **Phase 5**: tests and deployment-ready config baseline.
+
+## Deployment notes
+
+- Deploy on Vercel/Node runtime with managed Postgres.
+- Run Prisma migrations during release.
+- Schedule scoring worker via cron/queue.
+- Use UTC exclusively for all scheduling and computations.
