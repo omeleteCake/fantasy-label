@@ -1,45 +1,71 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db";
+import { validateCredentials } from "@/lib/auth/service";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   providers: [
     Credentials({
-      name: "Demo Login",
-      credentials: { email: { label: "Email", type: "text" } },
-      authorize: async (credentials) => {
-        const email = credentials.email as string;
-        if (!email) return null;
-        let user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
-              email,
-              name: email.split("@")[0],
-              isAdmin: email === process.env.ADMIN_EMAIL,
-              wallet: { create: { balance: Number(process.env.STARTING_CASH ?? "100000") } },
-            },
-          });
+      name: "Email + Password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
         }
-        return { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin };
+
+        const user = await validateCredentials({
+          email: String(credentials.email),
+          password: String(credentials.password),
+        });
+
+        if (!user) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.username,
+          role: user.role,
+        };
       },
     }),
   ],
   callbacks: {
-    jwt: async ({ token, user }) => {
+    async jwt({ token, user }) {
       if (user) {
-        token.sub = user.id as string;
-        token.isAdmin = (user as { isAdmin?: boolean }).isAdmin ?? false;
+        token.role = user.role;
+        token.sub = user.id;
       }
+
       return token;
     },
-    session: async ({ session, token }) => {
-      if (session.user) {
-        session.user.id = token.sub as string;
-        session.user.isAdmin = Boolean(token.isAdmin);
+    async session({ session, token }) {
+      if (session.user && token.sub) {
+        session.user.id = token.sub;
+        session.user.role = typeof token.role === "string" ? token.role : "USER";
       }
+
       return session;
     },
   },
 });
+
+export async function requireAdmin() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return false;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+
+  return user?.role === "ADMIN";
+}
